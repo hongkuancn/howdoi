@@ -44,7 +44,7 @@ from requests.exceptions import SSLError
 from howdoi import __version__
 from howdoi.errors import GoogleValidationError, BingValidationError, DDGValidationError
 
-logging.basicConfig(format='%(levelname)s: %(message)s')
+logging.basicConfig(filename='example.log', format='%(levelname)s: %(message)s', level=logging.DEBUG)
 if os.getenv('HOWDOI_DISABLE_SSL'):  # Set http instead of https
     SCHEME = 'http://'
     VERIFY_SSL_CERTIFICATE = False
@@ -143,6 +143,7 @@ class IntRange:
 
 def _random_int(width):
     bres = os.urandom(width)
+    # 兼容不同python版本
     if sys.version < '3':
         ires = int(bres.encode('hex'), 16)
     else:
@@ -197,6 +198,7 @@ def _add_links_to_text(element):
             replacement = copy
         else:
             replacement = f'[{copy}]({href})'
+        # pquery_object被替换成replacement
         pquery_object.replace_with(replacement)
 
 
@@ -244,7 +246,7 @@ def _extract_links_from_duckduckgo(html):
             results.append(parsed_url[0])
     return results
 
-
+# 根据搜索引擎的返回结果，得到需要继续搜索的links
 def _extract_links(html, search_engine):
     if search_engine == 'bing':
         return _extract_links_from_bing(html)
@@ -264,7 +266,7 @@ def _is_blocked(page):
 
     return False
 
-
+# 根据query(query是str)，如print hello world in python, 得到links
 def _get_links(query):
     search_engine = os.getenv('HOWDOI_SEARCH_ENGINE', 'google')
     search_url = _get_search_url(search_engine).format(URL, url_quote(query))
@@ -272,6 +274,7 @@ def _get_links(query):
     logging.info('Searching %s with URL: %s', search_engine, search_url)
 
     try:
+        # 请求搜索引擎的返回
         result = _get_result(search_url)
     except requests.HTTPError:
         logging.info('Received HTTPError')
@@ -288,7 +291,7 @@ def _get_links(query):
         logging.info(result)
     return list(dict.fromkeys(links))  # remove any duplicates
 
-
+# 取pos位置的link
 def get_link_at_pos(links, position):
     if not links:
         return False
@@ -299,7 +302,7 @@ def get_link_at_pos(links, position):
         link = links[-1]
     return link
 
-
+# 选择词性分析器，高亮处理
 def _format_output(args, code):
     if not args['color']:
         return code
@@ -337,6 +340,7 @@ def _get_questions(links):
     return [link for link in links if _is_question(link)]
 
 
+# 基于对网页结果特性的筛选
 def _get_answer(args, link):  # pylint: disable=too-many-branches
     cache_key = _get_cache_key(link)
     page = cache.get(link)  # pylint: disable=assignment-from-none
@@ -374,6 +378,7 @@ def _get_answer(args, link):  # pylint: disable=too-many-branches
                     texts.append(_format_output(args, current_text))
                 else:
                     texts.append(current_text)
+                    texts.append(current_text)
         text = '\n'.join(texts)
     else:
         text = _format_output(args, get_text(instructions.eq(0)))
@@ -403,11 +408,12 @@ def _get_links_with_cache(query):
 
     return question_links
 
-
+# 组建行分隔符
 def build_splitter(splitter_character='=', splitter_length=80):
     return '\n' + splitter_character * splitter_length + '\n\n'
 
-
+# 根据args dict得到结果
+# 返回 [{answer: " ", link: " ", ..}, {answer: " ", link: " "}]
 def _get_answers(args):
     """
     @args: command-line arguments
@@ -439,7 +445,7 @@ def _get_answers(args):
     logging.info('Total answers returned: %s', len(answers))
     return answers
 
-
+# 得到结果的worker，既返回answer，也返回link，没有检查是否只返回link
 def _get_answer_worker(args, link):
     answer = _get_answer(args, link)
     result = {
@@ -450,6 +456,7 @@ def _get_answer_worker(args, link):
 
     multiple_answers = (args['num_answers'] > 1 or args['all'])
 
+    # 即使只返回link，也要检查这个link是不是有效的link
     if not answer:
         return result
     if not args['link'] and not args['json_output'] and multiple_answers:
@@ -469,11 +476,11 @@ def _clear_cache():
 
     return cache.clear()
 
-
+# 检查是否是help请求
 def _is_help_query(query):
     return any(query.lower() == help_query for help_query in SUPPORTED_HELP_QUERIES)
 
-
+# 如果是dict，有error就返回，如果是array，就format
 def _format_answers(args, res):
     if "error" in res:
         return f'ERROR: {RED}{res["error"]}{END_FORMAT}'
@@ -509,13 +516,14 @@ def _get_help_instructions():
 
     return instruction_splitter.join(instructions)
 
-
+# 外部调用函数+全部参数+软件版本
+# args有两种可能，一种是args的dict，一种是args的query，就是str
 def _get_cache_key(args):
     frame = inspect.currentframe()
     calling_func = inspect.getouterframes(frame)[1].function
     return calling_func + str(args) + __version__
 
-
+# 格式化stash item
 def format_stash_item(fields, index=-1):
     title = fields['alias']
     description = fields['desc']
@@ -524,7 +532,7 @@ def format_stash_item(fields, index=-1):
         return f'{UNDERLINE}{BOLD}$ {title}{END_FORMAT}\n\n{description}\n'
     return f'{UNDERLINE}{BOLD}$ [{item_num}] {title}{END_FORMAT}\n\n{description}\n'
 
-
+# 打印stash item，行分隔符用#
 def print_stash(stash_list=None):
     if not stash_list or len(stash_list) == 0:
         stash_list = ['\nSTASH LIST:']
@@ -539,7 +547,7 @@ def print_stash(stash_list=None):
         stash_list = [format_stash_item(x['fields'], i) for i, x in enumerate(stash_list)]
     print(build_splitter('#').join(stash_list))
 
-
+# 得到stash key，去除无效字段，把dict转为字符串
 def _get_stash_key(args):
     stash_args = {}
     ignore_keys = [STASH_SAVE, STASH_VIEW, STASH_REMOVE, STASH_EMPTY, 'tags']  # ignore these for stash key
@@ -557,9 +565,10 @@ def _stash_remove(cmd_key, title):
     else:
         print(f'\n{BOLD}{RED}"{title}" not found in stash{END_FORMAT}\n')
 
-
+# cmd_key是stash key
 def _stash_save(cmd_key, title, answer):
     try:
+        # save_command(cmd, desc, alias="")
         keep_utils.save_command(cmd_key, answer, title)
     except FileNotFoundError:
         os.system('keep init')
@@ -567,7 +576,7 @@ def _stash_save(cmd_key, title, answer):
     finally:
         print_stash()
 
-
+# 处理返回值，res可能是array，也可能是error message
 def _parse_cmd(args, res):
     answer = _format_answers(args, res)
     cmd_key = _get_stash_key(args)
@@ -589,6 +598,7 @@ def howdoi(raw_query):
     else:
         args = raw_query
 
+    # 命令行参数，系统环境变量，google兜底
     os.environ['HOWDOI_SEARCH_ENGINE'] = args['search_engine'] or os.getenv('HOWDOI_SEARCH_ENGINE') or 'google'
     search_engine = os.getenv('HOWDOI_SEARCH_ENGINE')
     if search_engine not in SUPPORTED_SEARCH_ENGINES:
